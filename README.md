@@ -1,2 +1,2 @@
 # nftfi-options-protocol
-An options protocol built on top of NFTfi
+An Options Protocol built on top of NFTfi
