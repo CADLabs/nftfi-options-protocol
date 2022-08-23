@@ -25,13 +25,12 @@ def policy_agents(params, substep, state_history, previous_state):
     # BSM Volatility
     # make this not hacky for the first few timesteps
     
-    sigma = 0.01
+    sigma = 0.1
     
     if timestep > 2:
         price_history = np.array([state[-1]["volatile_asset_price"] for state in state_history[0:timestep]])
         returns_history = price_history[1:] / price_history[:-1] - 1
-        sigma = returns_history.std() * np.sqrt(timestep)
-
+        sigma = returns_history.std() * np.sqrt(option_maturity)
 
     option = Option(
         option_type="call",
@@ -42,8 +41,8 @@ def policy_agents(params, substep, state_history, previous_state):
         volatility=sigma,
     )
     
-    option_payoff = option.option_payoff()
-    bsm_price = 0#option.bsm_price(timestep)
+    bsm_price = option.bsm_price(timestep)
+    option_payoff = option.payoff()
     
     # Agent Logic
 
@@ -62,30 +61,44 @@ def policy_agents(params, substep, state_history, previous_state):
         if agent.exercised == False:
             
             # agent puts an option on the market with probability p_sell
-            if agent.is_selling_option == False and sell_option == 1:
-                agent.is_selling_option = True
+            if (agent.option_side != "buy"
+                and agent.accepting_buy_order == False
+                and sell_option == 1
+               ):
+                
+                agent.accepting_buy_order = True
         
             # agents not in possession of an option buy one with probability p_buy
-            if agent.has_active_option == False and buy_option == 1:
+            if agent.has_counterparty == False and buy_option == 1:
                 
                 # find an available seller amongst agents that are selling
                 for sell_agent in agents:
                     
                     # buy from first available seller
-                    if sell_agent.is_selling_option:
+                    if sell_agent.accepting_buy_order:
                         
                         # buy the option and exit seller search
                         agent.buy_option(sell_agent, timestep, bsm_price)
                         break
+                        
+            # check if in profit
+            payoff_value = option_payoff(volatile_asset_price, strike_price)
+            profit = payoff_value - agent.premium_paid
+            
+            is_in_profit = profit > 0
 
             # get agents who own the option to exercise it
-            if agent.option_side == "buy" and agent.has_active_option == True and exercise_option == 1:
-                    
+            if (agent.option_side == "buy"
+                and agent.has_counterparty == True
+                and is_in_profit == True
+                and exercise_option == 1
+               ):
+                
                 # get the counterparty
                 sell_agent = previous_state["agent_"+str(agent.bought_from_Id)]
                 
                 # exercise
-                agent.exercise(sell_agent, volatile_asset_price, strike_price, option_maturity, timestep, option_payoff)
+                agent.exercise(sell_agent, option, volatile_asset_price, timestep)
             
         
             

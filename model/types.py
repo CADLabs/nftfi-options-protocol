@@ -45,48 +45,72 @@ class Agent(metaclass=ABCMeta):
     """## Generic Deposit
     A generic option agent
     """
+    
+    # base
 
     agent_id: str
     """Agent ID"""
-    _has_active_option: bool = False
-    """Agent is currently engaged in option"""
-    _owned_activatedAt: int = None
-    """Timestep when option was purchased"""
-    _premium_paid: float = 0.0
-    """Premium paid"""
-    _exercised: bool = False
-    """If option is exercised"""
-    _exercisedAt: int = None
-    """Timestep of option exercise"""
-    _time_held: int = 0
-    """Time difference between bought and exercised"""
-    _payoff_value: USD = 0.0
-    """Current value of payoff for option"""
-    _discounted_payoff_value: USD = 0.0
-    """Present (T0) value of payoff for option"""
-
-    # Sell side
+    
     _option_side: str = None
     """Option side"""
-    _is_selling_option: bool = False
-    """Agent is currently long an option"""
-    _option_sold_at: int = None
-    """Agent is currently long an option"""
     
-    _sold_to_Id: str = None
-    """Id of option buyer"""
+    _has_counterparty: bool = False
+    """Agent is currently engaged in option"""
+    
+    _underwrittenAt: int = None
+    """Timestep when option was underwritten between buyer and seller"""
+    
+    _time_held: int = 0
+    """Time difference between bought and exercised"""
+    
+    # buy side
     
     _bought_from_Id: str = None
     """Id of option seller"""
     
+    _option_bought_at: int = None
+    """Time at which buyer bought"""
+    
+    _premium_paid: float = 0.0
+    """Premium buyer paid"""
+    
+    _exercised: bool = False
+    """If option is exercised"""
+    
+    _exercisedAt: int = None
+    """Timestep of option exercise"""
+    
+    _payoff_received: USD = 0.0
+    """Current value of payoff for option"""
+    
+    _discounted_payoff_received: USD = 0.0
+    """Present (T0) value of payoff for option"""
+    
+    # sell side
+    
+    _sold_to_Id: str = None
+    """Id of option buyer"""
+    
+    _option_sold_at: int = None
+    """Time at which seller sold"""
+    
+    _accepting_buy_order: bool = False
+    """Agent is currently short an option"""
+    
+    _premium_received: float = 0.0
+    """Premium seller received"""
+    
+    _payoff_paid: USD = 0.0
+    """Current value of payoff for option"""
+    
+    _discounted_payoff_paid: USD = 0.0
+    """Present (T0) value of payoff for option"""
+
     
     def buy_option(self, sell_agent, timestep, premium):
         """
         Buy option
         """
-        self._has_active_option = True
-        self._owned_activatedAt = timestep
-        self._premium_paid = premium
         
         # buy and sell side recording
         self.option_side = "buy"
@@ -94,37 +118,56 @@ class Agent(metaclass=ABCMeta):
         
         self.bought_from_Id = sell_agent.agent_ID
         sell_agent.sold_to_Id = self.agent_ID
+        
+        # buy side
+        self.has_counterparty = True
+        self.underwrittenAt = timestep
+        self.option_bought_at = timestep
+        self.premium_paid = premium
+        
+        #sell side
+        sell_agent.has_counterparty = True
+        sell_agent.underwrittenAt = timestep
+        sell_agent.option_sold_at = timestep
+        sell_agent.premium_received = premium
+        
+        sell_agent.accepting_buy_order = False
 
         return self
     
-    def exercise(self, sell_agent, asset_price: USD, strike_price: USD, option_maturity: int, timestep: int, payoff):
+    def exercise(self, sell_agent, option, asset_price: USD, timestep: int):
         """
         Exercise an owned option
         """
         
-        assert timestep <= option_maturity, 'exercising expired option'
+        assert timestep <= option.maturity, 'exercising expired option'
         assert sell_agent.agent_ID == self.bought_from_Id, 'buyer and seller mismatch'
         
-        self._payoff_value = payoff(asset_price, strike_price)
-        self._has_active_option = False
-        self._exercised = True
-        self._exercisedAt = timestep
-        self._time_held = timestep - self._owned_activatedAt
-        self._option_side = None
+        # instantiate payoff function
+        option_payoff = option.payoff()
         
+        # get discount factor
+        discount_factor = np.exp(-option.risk_free_rate*((option.maturity-timestep)/365))
+        
+        # buy side
+        self.payoff_received = option_payoff(asset_price, option.strike_price)
+        self.discounted_payoff_received = discount_factor * self.payoff_received
+
+        self.exercised = True
+        self.exercisedAt = timestep
+        self.time_held = timestep - self.underwrittenAt
+        self.option_side = None
+        self.has_counterparty = False
+        
+        # sell side
+        sell_agent.payoff_paid = option_payoff(asset_price, option.strike_price)
+        sell_agent.discounted_payoff_paid = discount_factor * sell_agent.payoff_paid
         # mark seller also as exercised to exclude from further interactions
         sell_agent.exercised = True 
-        sell_agent.is_selling_option = False
+        sell_agent.exercisedAt = timestep
+        sell_agent.time_held = timestep - self.underwrittenAt
         sell_agent.option_side = None
-        
-        # TBA with setters
-        # TBA: counterparty accounting consistency
-        
-#         sell_agent._payoff_value = -payoff(asset_price, strike_price)
-#         sell_agent._has_active_option = False
-
-#         sell_agent._exercisedAt = timestep
-#         sell_agent._time_held = timestep - self._owned_activatedAt
+        sell_agent.has_counterparty = False
 
         return self
 
@@ -139,47 +182,112 @@ class Agent(metaclass=ABCMeta):
         return self.agent_id
 
     @property
-    def has_active_option(self):
+    def has_counterparty(self):
         """Option is owned"""
-        return self._has_active_option
+        return self._has_counterparty
+    
+    @has_counterparty.setter
+    def has_counterparty(self, v: bool) -> None:
+        self._has_counterparty = v
     
     @property
     def exercised(self):
         """Option has been exercised"""
         return self._exercised
     
+    @exercised.setter
+    def exercised(self, v: bool) -> None:
+        self._exercised = v
+        
+    @property
+    def exercisedAt(self):
+        """Option has been exercised"""
+        return self._exercisedAt
+    
+    @exercised.setter
+    def exercisedAt(self, v: int) -> None:
+        self._exercisedAt = v
+        
+    @property
+    def underwrittenAt(self):
+        """Option has been activated"""
+        return self._underwrittenAt
+    
+    @exercised.setter
+    def underwrittenAt(self, v: int) -> None:
+        self._underwrittenAt = v
+    
     @property
     def time_held(self):
         """Time exercised option was held"""
         return self._time_held
-
-    @property
-    def payoff_value(self):
-        """Current value of payoff for option"""
-        return self._payoff_value
-
-    @property
-    def discounted_payoff_value(self):
-        """Present (T0) value of payoff for option"""
-        return self._discounted_payoff_value
-
-    @has_active_option.setter
-    def has_active_option(self, v: bool) -> None:
-        self._has_active_option = v
-        
-    @exercised.setter
-    def exercised(self, v: bool) -> None:
-        self._has_active_option = v
-        
-    # Sell side
-    @property
-    def is_selling_option(self):
-        """Option is owned"""
-        return self._is_selling_option
     
-    @is_selling_option.setter
-    def is_selling_option(self, v: bool) -> None:
-        self._is_selling_option = v
+    @time_held.setter
+    def time_held(self, v: int) -> None:
+        self._time_held = v
+
+    @property
+    def payoff_received(self):
+        """Current value of payoff for option"""
+        return self._payoff_received
+    
+    @payoff_received.setter
+    def payoff_received(self, v: USD) -> None:
+        self._payoff_received = v
+
+    @property
+    def discounted_payoff_received(self):
+        """Present (T0) value of payoff for option"""
+        return self._discounted_payoff_received
+    
+    @discounted_payoff_received.setter
+    def discounted_payoff_received(self, v: USD) -> None:
+        self._discounted_payoff_received = v
+        
+    @property
+    def payoff_paid(self):
+        """Current value of payoff for option"""
+        return self._payoff_paid
+    
+    @payoff_paid.setter
+    def payoff_paid(self, v: USD) -> None:
+        self._payoff_paid = v
+
+    @property
+    def discounted_payoff_paid(self):
+        """Present (T0) value of payoff for option"""
+        return self._discounted_payoff_paid
+    
+    @discounted_payoff_paid.setter
+    def discounted_payoff_paid(self, v: USD) -> None:
+        self._discounted_payoff_paid = v
+    
+    @property
+    def premium_paid(self):
+        """Premium paid by buyer"""
+        return self._premium_paid
+    
+    @premium_paid.setter
+    def premium_paid(self, v: USD) -> None:
+        self._premium_paid = v
+        
+    @property
+    def premium_received(self):
+        """Premium recieved by seller"""
+        return self._premium_received
+    
+    @premium_received.setter
+    def premium_received(self, v: USD) -> None:
+        self._premium_received = v
+        
+    @property
+    def accepting_buy_order(self):
+        """Option is owned"""
+        return self._accepting_buy_order
+    
+    @accepting_buy_order.setter
+    def accepting_buy_order(self, v: bool) -> None:
+        self._accepting_buy_order = v
         
     @property
     def option_side(self):
@@ -189,6 +297,24 @@ class Agent(metaclass=ABCMeta):
     @option_side.setter
     def option_side(self, v: str) -> None:
         self._option_side = v
+        
+    @property
+    def option_bought_at(self):
+        """Option bought at"""
+        return self._option_bought_at
+    
+    @option_bought_at.setter
+    def option_bought_at(self, v: int) -> None:
+        self._option_bought_at = v
+        
+    @property
+    def option_sold_at(self):
+        """Option sold at"""
+        return self._option_sold_at
+    
+    @option_sold_at.setter
+    def option_sold_at(self, v: int) -> None:
+        self._option_sold_at = v
         
     @property
     def bought_from_Id(self):
@@ -204,13 +330,11 @@ class Agent(metaclass=ABCMeta):
         """Id of buyer"""
         return self._sold_to_Id
     
-    @bought_from_Id.setter
+    @sold_to_Id.setter
     def sold_to_Id(self, v: str) -> None:
         self._sold_to_Id = v
-        
-#     @owned_activatedAt.setter
-#     def owned_activatedAt(self, timestep: int) -> None:
-#         self._owned_activatedAt = timestep
+
+
 # -
 
 @enforce_types
@@ -237,13 +361,13 @@ class Option(metaclass=ABCMeta):
         """
         BSM d1
         """
-        return (np.log(S/K)+(r+sigma**2/2.)*(T-t))/(sigma*np.sqrt(T-t))
+        return (np.log(S/K)+(r+sigma**2/2.)*((T-t+1)/365))/(sigma*np.sqrt((T-t+1)/365))
 
     def d2(self, S, K, T, r, sigma, t):
         """
         BSM d2
         """
-        return (np.log(S/K)+(r-sigma**2/2.)*(T-t))/(sigma*np.sqrt(T-t))
+        return (np.log(S/K)+(r-sigma**2/2.)*((T-t+1)/365))/(sigma*np.sqrt((T-t+1)/365))
 
 
     def bsm_price(self, t):
@@ -259,19 +383,19 @@ class Option(metaclass=ABCMeta):
 
         if self.option_type == "call":
             return (S*norm.cdf(self.d1(S,K,T,r,sigma,t))-
-                    K*np.exp(-r*(T-t))*norm.cdf(self.d2(S,K,T,r,sigma,t)))
+                    K*np.exp(-r*((T-t+1)/365))*norm.cdf(self.d2(S,K,T,r,sigma,t)))
         
         if self.option_type == "put":
-            return (K*np.exp(-r*(T-t))*norm.cdf(-self.d2(S,K,T,r,sigma,t))-
+            return (K*np.exp(-r*((T-t+1)/365))*norm.cdf(-self.d2(S,K,T,r,sigma,t))-
                     S*norm.cdf(-self.d1(S,K,T,r,sigma,t)))
         
         if self.option_type == "straddle":
             return (S*(norm.cdf(self.d1(S,K,T,r,sigma,t)) - norm.cdf(-self.d1(S,K,T,r,sigma,t))) -
-                   K*np.exp(-r*(T-t))*(norm.cdf(self.d2(S,K,T,r,sigma,t)) - norm.cdf(-self.d2(S,K,T,r,sigma,t))))
+                   K*np.exp(-r*((T-t+1)/365))*(norm.cdf(self.d2(S,K,T,r,sigma,t)) - norm.cdf(-self.d2(S,K,T,r,sigma,t))))
         
         return 0
     
-    def option_payoff(self):
+    def payoff(self):
         """
         Option payoff
         """

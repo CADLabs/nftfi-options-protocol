@@ -28,7 +28,7 @@ monte_carlo_runs = 100
 
 initial_price = 2000
 strike = initial_price
-mu = -0.08
+mu = 0.1#-0.08
 sigma = 0.3
 T = 365 * dt  # option maturity / expiration
 
