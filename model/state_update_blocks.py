@@ -1,9 +1,10 @@
 import model.parts.options as options
 import model.parts.agents as agents
+import experiments.simulation_configuration as simulation
 
 from model.utils import update_from_signal, update_timestamp
 
-n_agents = 100
+n_agents = simulation.N_AGENTS
 
 enabled = "enabled"
 description = "description"

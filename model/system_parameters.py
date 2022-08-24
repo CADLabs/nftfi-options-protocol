@@ -23,8 +23,8 @@ from model.stochastic_processes import create_stochastic_process_realizations
 timesteps = simulation.TIMESTEPS
 dt=simulation.DELTA_TIME
 
-n_agents = 100
-monte_carlo_runs = 100
+monte_carlo_runs = simulation.MONTE_CARLO_RUNS
+n_agents = simulation.N_AGENTS
 
 initial_price = 2000
 strike = initial_price
@@ -108,6 +108,11 @@ class Parameters:
     strike_price: List[int] = default([strike])
     """
     Option Strike Price
+    """
+    
+    option_type: List[str] = default(["call"])
+    """
+    Option Type, put, call or straddle
     """
     
     # Agents configuration

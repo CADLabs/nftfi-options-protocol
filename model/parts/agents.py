@@ -2,7 +2,9 @@ import numpy as np
 from scipy.stats import norm
 from model.types import Option
 
-n_agents = 100
+import experiments.simulation_configuration as simulation
+
+n_agents = simulation.N_AGENTS
 
 
 
@@ -15,6 +17,7 @@ def policy_agents(params, substep, state_history, previous_state):
     dt = params["dt"]
     strike_price = params["strike_price"]
     option_maturity = params["option_maturity"]
+    option_type = params["option_type"]
 
     # State Variables
     agents = [previous_state["agent_"+str(i)] for i in range(n_agents)]
@@ -33,7 +36,7 @@ def policy_agents(params, substep, state_history, previous_state):
         sigma = returns_history.std() * np.sqrt(option_maturity)
 
     option = Option(
-        option_type="call",
+        option_type=option_type,
         underlying_price=volatile_asset_price,
         strike_price=strike_price,
         maturity=option_maturity,
