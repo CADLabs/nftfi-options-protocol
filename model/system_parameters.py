@@ -26,14 +26,31 @@ dt=simulation.DELTA_TIME
 monte_carlo_runs = simulation.MONTE_CARLO_RUNS
 n_agents = simulation.N_AGENTS
 
+# Market scenario
+scenario = 'Bear'
+
+market_conditions = {
+    'Bull': {
+        'mu': 0.1,
+        'sigma': 0.25,
+    },
+    'Bear': {
+        'mu': -0.15,
+        'sigma': 0.25,
+    }
+}
+
+# +
 initial_price = 2000
 strike = initial_price
-mu = 0.1#-0.08
-sigma = 0.3
 T = 365 * dt  # option maturity / expiration
 
+mu = market_conditions[scenario]['mu']
+sigma = market_conditions[scenario]['sigma']
+# -
+
 volatile_asset_price_samples = create_stochastic_process_realizations(
-    "geometric_brownian_motion_process",
+    "manual_gbm_process",#"geometric_brownian_motion_process",
     timesteps=timesteps,
     dt=dt,
     mu=mu,

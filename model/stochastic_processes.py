@@ -34,6 +34,37 @@ def geometric_brownian_motion_process(
     return price_samples
 
 
+def manual_gbm_process(
+    timesteps=simulation.TIMESTEPS,
+    dt=simulation.DELTA_TIME,
+    rng=np.random.default_rng(1),
+    run=0,
+    **kwargs,
+):
+    """## Configure Geometric Brownian Motion process
+    > A geometric Brownian motion S_t is the analytic solution to the stochastic differential equation with Wiener process...
+    """
+    
+    # NOTE: set separately from rng_generator
+    np.random.seed(run)
+
+    T = timesteps / 365.0  # Business days in a year
+    dt_ = T / timesteps  # 4.0 is needed as four prices per day are required
+    
+    mu = kwargs.get("mu")
+    sigma = kwargs.get("sigma")
+    initial_price = kwargs.get("initial_price", 1) or 1
+
+    asset_path = np.exp(
+        (mu - sigma**2 / 2) * dt_ +
+        sigma * np.random.normal(0, np.sqrt(dt_), size=(timesteps))
+    )
+    
+    price_samples = initial_price * asset_path.cumprod()
+    
+    return price_samples
+
+
 def brownian_motion_process(
     timesteps=simulation.TIMESTEPS,
     dt=simulation.DELTA_TIME,
@@ -107,6 +138,19 @@ def create_stochastic_process_realizations(
                 initial_price=kwargs.get("initial_price"),
             )
             for _ in range(runs)
+        ]
+    elif process == "manual_gbm_process":
+        return [
+            manual_gbm_process(
+                timesteps=timesteps,
+                dt=dt,
+                rng=rng_generator(),
+                run=run, #NOTE: new param
+                mu=kwargs.get("mu"),
+                sigma=kwargs.get("sigma"),
+                initial_price=kwargs.get("initial_price"),
+            )
+            for run in range(runs)
         ]
     elif process == "brownian_motion_process":
         return [

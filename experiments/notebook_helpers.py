@@ -1,9 +1,14 @@
+# +
 import numpy as np
 import pandas as pd
 from tqdm.notebook import tqdm, trange
 import statsmodels.api as sm
 import plotly.graph_objects as go
 
+import experiments.simulation_configuration as simulation
+
+
+# -
 
 def check_single_agent_counterparty(df, i, run, side="buy"):
     """
