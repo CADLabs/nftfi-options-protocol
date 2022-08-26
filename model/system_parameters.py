@@ -27,7 +27,7 @@ monte_carlo_runs = simulation.MONTE_CARLO_RUNS
 n_agents = simulation.N_AGENTS
 
 # Market scenario
-scenario = 'Bear'
+scenario = 'Bull'
 
 market_conditions = {
     'Bull': {
