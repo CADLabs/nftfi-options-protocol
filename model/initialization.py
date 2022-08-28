@@ -25,16 +25,12 @@ def setup_initial_state(context: radcad.Context):
     run = context.run
     timestep = 0
 
-    # Add PCV Deposit and User Deposit distribution configuration to StateVariables
-    StateVariablesWithDeposits = make_dataclass(
-        "StateVariablesWithDeposits",
+    StateVariablesWithAgents = make_dataclass(
+        "StateVariablesWithAgents",
         fields=(
-            # Add all PCV Deposit instances
             [(key, Agent, params["agents"][key]) for key in agent_keys]
         ),
         bases=(StateVariables,),
     )
-    # Update Initial State to include all Deposit instances
-    context.initial_state.update(StateVariablesWithDeposits().__dict__)
+    context.initial_state.update(StateVariablesWithAgents().__dict__)
     initial_state = context.initial_state
-
